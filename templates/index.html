@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Context Chat</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div id="app-container">
+        <h1>AI Context Chat</h1>
+        <div id="chat-window">
+            <div id="chat-messages">
+                <div class="message ai-message">Hi! What topic are we discussing today?</div>
+            </div>
+        </div>
+        <form id="chat-form">
+            <input type="text" id="topic-input" placeholder="Enter topic (e.g., project-x)" required>
+            <div id="input-area">
+                <textarea id="prompt-input" placeholder="Type your message..." required></textarea>
+                <button type="submit" id="send-button">Send</button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        const chatForm = document.getElementById('chat-form');
+        const chatMessages = document.getElementById('chat-messages');
+        const promptInput = document.getElementById('prompt-input');
+
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const topic = document.getElementById('topic-input').value;
+            const prompt = promptInput.value;
+
+            if (!prompt || !topic) return;
+
+            // Display user message
+            addMessage(prompt, 'user-message');
+            promptInput.value = '';
+
+            // Send to backend and get response
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ topic: topic, prompt: prompt })
+                });
+
+                if (!response.ok) throw new Error('Network response was not ok.');
+                
+                const data = await response.json();
+                addMessage(data.response, 'ai-message');
+
+            } catch (error) {
+                console.error('Error:', error);
+                addMessage('Sorry, an error occurred.', 'ai-message error');
+            }
+        });
+
+        function addMessage(text, className) {
+            const div = document.createElement('div');
+            div.className = `message ${className}`;
+            div.textContent = text;
+            chatMessages.appendChild(div);
+            chatMessages.scrollTop = chatMessages.scrollHeight; // Auto-scroll
+        }
+    </script>
+</body>
+</html>

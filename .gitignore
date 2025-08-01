@@ -1,0 +1,7 @@
+# .gitignore
+
+# Ignore the vector database
+vectordb/
+
+# Ignore Python cache files
+__pycache__/
