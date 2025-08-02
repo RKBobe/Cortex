@@ -1,0 +1,31 @@
+html, body {
+    height: 100%;
+}
+
+body {
+    background-color: #212529; /* Bootstrap dark background */
+}
+
+#chat-window {
+    background-color: #343a40; /* A slightly lighter dark shade */
+}
+
+.message-bubble {
+    max-width: 80%;
+    word-wrap: break-word;
+}
+
+.user-message {
+    background-color: #0d6efd; /* Bootstrap primary blue */
+    color: white;
+}
+
+.ai-message {
+    background-color: #495057; /* Bootstrap gray */
+    color: white;
+}
+
+#prompt-input {
+    resize: none;
+    overflow-y: hidden;
+}
