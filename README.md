@@ -1,4 +1,4 @@
-# ai-context-tool
+# Cortex 
 persistant contextual memory for ai
 # AI Context Tool 🧠
 
