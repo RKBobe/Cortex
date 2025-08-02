@@ -9,7 +9,7 @@ import re
 class AIContextManager:
     def __init__(self):
         """Initializes the backend components."""
-        DB_DIR = "vectordb"
+        DB_DIR = "/data/vectordb"
         self.client = chromadb.PersistentClient(path=DB_DIR)
         
         try:

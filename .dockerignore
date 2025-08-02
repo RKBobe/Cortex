@@ -1,0 +1,22 @@
+# flyctl launch added from .gitignore
+# .gitignore
+
+# Ignore the vector database
+**/vectordb
+
+# Ignore Python cache files
+**/__pycache__
+
+# flyctl launch added from BHv3/.gitignore
+# Python
+BHv3/**/__pycache__
+BHv3/**/*.pyc
+
+# Virtual Environment
+BHv3/**/venv
+BHv3/**/*.env
+
+# IDE settings
+BHv3/**/.vscode
+BHv3/**/.idea
+fly.toml
