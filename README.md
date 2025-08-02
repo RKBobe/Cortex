@@ -1,4 +1,4 @@
-# ai-context-tool
+# Cortex
 persistant contextual memory for ai
 # AI Context Tool 🧠
 
@@ -32,8 +32,8 @@ The application is built with multi-user support, providing each user with a com
 
 1.  **Clone the Repository**:
     ```bash
-    git clone [https://github.com/your-username/ai-context-tool.git](https://github.com/your-username/ai-context-tool.git)
-    cd ai-context-tool
+    git clone [https://github.com/your-username/Cortex.git](https://github.com/your-username/Cortex.git)
+    cd Cortex
     ```
 
 2.  **Create a Virtual Environment**:
