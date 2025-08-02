@@ -1,4 +1,5 @@
 # Cortex
+# Cortex 
 persistant contextual memory for ai
 # AI Context Tool 🧠
 
