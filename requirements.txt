@@ -2,3 +2,4 @@ flask
 google-generativeai
 chromadb
 gunicorn
+Flask-Cors

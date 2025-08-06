@@ -1,35 +1,40 @@
-from flask import Flask, render_template, request, jsonify
+# app.py (Now a pure API)
+
+from flask import Flask, request, jsonify
+from flask_cors import CORS  # Import CORS
 from backend import AIContextManager
 from werkzeug.utils import secure_filename
 import traceback
 import threading
 
-# Initialize the Flask app and the backend manager
+# Initialize the Flask app
 app = Flask(__name__)
+
+# --- NEW: Enable CORS ---
+# This will allow the React frontend (running on a different port)
+# to make requests to this Flask backend.
+CORS(app)
+
+# Initialize the backend manager
 backend = AIContextManager()
 
-#
-# --- Main Web Page Route ---
-#
-@app.route("/")
-def index():
-    """Renders the main chat page."""
-    return render_template("index.html")
+# The route that used to serve index.html has been removed.
+# The React app will now handle all UI.
 
 #
-# --- Chat Endpoint ---
+# --- API Endpoints ---
+# All your existing endpoints remain the same as they already handle JSON.
 #
+
 @app.route("/chat", methods=["POST"])
 def chat():
-    """Receives user input, processes it, and returns AI response."""
     data = request.get_json()
+    # ... (rest of the function is unchanged)
     user_id = data.get("user_id")
     topic = data.get("topic")
     user_prompt = data.get("prompt")
-
     if not all([user_id, topic, user_prompt]):
         return jsonify({"error": "User ID, topic, and prompt are required"}), 400
-
     try:
         ai_response = backend.process_prompt(user_id, topic, user_prompt)
         return jsonify({"response": ai_response})
@@ -38,22 +43,17 @@ def chat():
         traceback.print_exc()
         return jsonify({"error": "An internal error occurred."}), 500
 
-#
-# --- File Upload Endpoint ---
-#
+
 @app.route("/upload", methods=["POST"])
 def upload():
-    """Receives an uploaded file and ingests its content."""
+    # ... (rest of the function is unchanged)
     if "file" not in request.files:
         return jsonify({"error": "No file part"}), 400
-
     file = request.files["file"]
     user_id = request.form.get("user_id")
     topic = request.form.get("topic")
-
     if file.filename == "" or not topic or not user_id:
         return jsonify({"error": "User ID, topic, and a selected file are required"}), 400
-
     if file:
         try:
             filename = secure_filename(file.filename)
@@ -65,40 +65,31 @@ def upload():
             traceback.print_exc()
             return jsonify({"error": "An internal error occurred."}), 500
 
-#
-# --- GitHub Repo Ingestion Endpoint ---
-#
+
 @app.route("/ingest_repo", methods=["POST"])
 def ingest_repo():
-    """Receives a Git repo URL and starts the ingestion process in the background."""
+    # ... (rest of the function is unchanged)
     data = request.get_json()
     user_id = data.get("user_id")
     repo_url = data.get("repo_url")
     topic = data.get("topic")
-
     if not all([user_id, topic, repo_url]):
         return jsonify({"error": "User ID, topic, and repository URL are required"}), 400
-
     ingestion_thread = threading.Thread(
         target=backend.ingest_repo_from_url, args=(user_id, repo_url, topic)
     )
     ingestion_thread.start()
-
     return jsonify({"message": f"Started ingestion for {repo_url}. This may take several minutes."})
 
-#
-# --- NEW ENDPOINT ---
-#
+
 @app.route("/get_sources", methods=["POST"])
 def get_sources():
-    """Retrieves a list of unique ingested source names for a given topic."""
+    # ... (rest of the function is unchanged)
     data = request.get_json()
     user_id = data.get("user_id")
     topic = data.get("topic")
-
     if not user_id or not topic:
         return jsonify({"error": "User ID and topic are required"}), 400
-
     try:
         source_list = backend.get_sources_for_topic(user_id, topic)
         return jsonify({"sources": source_list})
@@ -106,7 +97,3 @@ def get_sources():
         print(f"An error occurred in /get_sources: {e}")
         traceback.print_exc()
         return jsonify({"error": "An internal error occurred."}), 500
-
-# This allows running the app directly for local development
-if __name__ == '__main__':
-    app.run(debug=True, port=5000)
