@@ -8,7 +8,6 @@ import threading
 app = Flask(__name__)
 backend = AIContextManager()
 
-
 #
 # --- Main Web Page Route ---
 #
@@ -16,7 +15,6 @@ backend = AIContextManager()
 def index():
     """Renders the main chat page."""
     return render_template("index.html")
-
 
 #
 # --- Chat Endpoint ---
@@ -38,8 +36,7 @@ def chat():
     except Exception as e:
         print(f"An error occurred in /chat: {e}")
         traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
-
+        return jsonify({"error": "An internal error occurred."}), 500
 
 #
 # --- File Upload Endpoint ---
@@ -55,24 +52,18 @@ def upload():
     topic = request.form.get("topic")
 
     if file.filename == "" or not topic or not user_id:
-        return (
-            jsonify({"error": "User ID, topic, and a selected file are required"}),
-            400,
-        )
+        return jsonify({"error": "User ID, topic, and a selected file are required"}), 400
 
     if file:
         try:
             filename = secure_filename(file.filename)
             content = file.read().decode("utf-8")
-
             backend.ingest_text(user_id, topic, content, filename)
-
             return jsonify({"message": f"Successfully ingested {filename}"})
         except Exception as e:
             print(f"An error occurred in /upload: {e}")
             traceback.print_exc()
-            return jsonify({"error": str(e)}), 500
-
+            return jsonify({"error": "An internal error occurred."}), 500
 
 #
 # --- GitHub Repo Ingestion Endpoint ---
@@ -86,17 +77,36 @@ def ingest_repo():
     topic = data.get("topic")
 
     if not all([user_id, topic, repo_url]):
-        return (
-            jsonify({"error": "User ID, topic, and repository URL are required"}),
-            400,
-        )
+        return jsonify({"error": "User ID, topic, and repository URL are required"}), 400
 
-    # Run the long-running ingestion task in a background thread
     ingestion_thread = threading.Thread(
         target=backend.ingest_repo_from_url, args=(user_id, repo_url, topic)
     )
     ingestion_thread.start()
 
-    return jsonify(
-        {"message": f"Started ingestion for {repo_url}. This may take several minutes."}
-    )
+    return jsonify({"message": f"Started ingestion for {repo_url}. This may take several minutes."})
+
+#
+# --- NEW ENDPOINT ---
+#
+@app.route("/get_sources", methods=["POST"])
+def get_sources():
+    """Retrieves a list of unique ingested source names for a given topic."""
+    data = request.get_json()
+    user_id = data.get("user_id")
+    topic = data.get("topic")
+
+    if not user_id or not topic:
+        return jsonify({"error": "User ID and topic are required"}), 400
+
+    try:
+        source_list = backend.get_sources_for_topic(user_id, topic)
+        return jsonify({"sources": source_list})
+    except Exception as e:
+        print(f"An error occurred in /get_sources: {e}")
+        traceback.print_exc()
+        return jsonify({"error": "An internal error occurred."}), 500
+
+# This allows running the app directly for local development
+if __name__ == '__main__':
+    app.run(debug=True, port=5000)

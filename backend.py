@@ -10,9 +10,11 @@ import re
 class AIContextManager:
     def __init__(self):
         """Initializes the backend components."""
-        DB_DIR = "/data/vectordb"
+        # UPDATED: Using a relative path for easier local development.
+        # A 'cortex_db' folder will be created in your project directory.
+        DB_DIR = "cortex_db" 
         self.client = chromadb.PersistentClient(path=DB_DIR)
-
+        
         try:
             genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
             self.text_model = genai.GenerativeModel("gemini-1.5-flash")
@@ -26,10 +28,11 @@ class AIContextManager:
         sane_topic = re.sub(r"[^a-zA-Z0-9_-]", "", topic)
 
         collection_name = f"user_{sane_user_id}_topic_{sane_topic}"
-
+        
+        # Enforce ChromaDB's length limits
         if len(collection_name) > 63:
             collection_name = collection_name[:63]
-
+            
         return self.client.get_or_create_collection(name=collection_name)
 
     def _summarize_interaction(self, user_prompt: str, ai_response: str) -> str:
@@ -41,9 +44,7 @@ class AIContextManager:
     def ingest_text(self, user_id: str, topic: str, content: str, filename: str):
         """Ingests a single block of text content into a user's topic."""
         collection = self._get_or_create_collection(user_id, topic)
-        print(
-            f"Ingesting content from '{filename}' for user '{user_id}' into topic '{topic}'..."
-        )
+        print(f"Ingesting content from '{filename}' for user '{user_id}' into topic '{topic}'...")
         document = f"--- Content from file: {filename} ---\n\n{content}"
 
         doc_embedding = genai.embed_content(
@@ -53,7 +54,11 @@ class AIContextManager:
         )["embedding"]
 
         collection.add(
-            embeddings=[doc_embedding], documents=[document], ids=[str(uuid.uuid4())]
+            embeddings=[doc_embedding], 
+            documents=[document], 
+            ids=[str(uuid.uuid4())],
+            # UPDATED: Add metadata so we can retrieve the source name later
+            metadatas=[{"source": filename}]
         )
         print("✅ Ingestion complete.")
 
@@ -69,31 +74,17 @@ class AIContextManager:
                     text=True,
                 )
                 print("✅ Git clone successful.")
-                self._ingest_directory(user_id, temp_dir, topic)
+                self._ingest_directory(user_id, temp_dir, topic, repo_url)
             except subprocess.CalledProcessError as e:
                 print(f"🚨 Failed to clone repository: {e.stderr}")
             except Exception as e:
                 print(f"🚨 An error occurred during ingestion: {e}")
 
-    def _ingest_directory(self, user_id: str, repo_path: str, topic: str):
+    def _ingest_directory(self, user_id: str, repo_path: str, topic: str, source_identifier: str):
         """Walks through a directory, chunks files, and stores them for a user's topic."""
         collection = self._get_or_create_collection(user_id, topic)
-        # We create a unique metadata field for the topic to allow targeted deletion
-        collection.delete(where={"topic_id": f"{user_id}-{topic}"})
-
-        SOURCE_CODE_EXTENSIONS = [
-            ".py",
-            ".js",
-            ".ts",
-            ".html",
-            ".css",
-            ".java",
-            ".c",
-            ".cpp",
-            ".rs",
-            ".go",
-            ".md",
-        ]
+        
+        SOURCE_CODE_EXTENSIONS = [".py", ".js", ".ts", ".html", ".css", ".java", ".c", ".cpp", ".rs", ".go", ".md"]
         IGNORE_DIRS = ["__pycache__", "node_modules", ".git", ".vscode", "venv"]
 
         documents, metadatas, ids = [], [], []
@@ -107,14 +98,13 @@ class AIContextManager:
                     try:
                         with open(file_path, "r", encoding="utf-8") as f:
                             content = f.read()
-                        chunk = f"--- File: {relative_path} ---\n\n{content}"
+                        chunk = f"--- File: {relative_path} from {source_identifier} ---\n\n{content}"
                         documents.append(chunk)
-                        metadatas.append(
-                            {"topic_id": f"{user_id}-{topic}", "file": relative_path}
-                        )
+                        # UPDATED: Changed metadata key from "file" to "source" for consistency
+                        metadatas.append({"source": f"{source_identifier}/{relative_path}"})
                         ids.append(str(uuid.uuid4()))
                     except Exception:
-                        pass  # Ignore files that can't be read
+                        pass # Ignore files that can't be read
 
         if not documents:
             print("No source code files found to ingest.")
@@ -156,11 +146,7 @@ class AIContextManager:
             if results and results["documents"]:
                 relevant_context = "\n---\n".join(results["documents"][0])
 
-        # New system prompt to instruct the AI on its role and how to use context
-        full_prompt = f"""
-You are a helpful AI assistant with a persistent memory.
-The user is asking you a question about a specific topic. Use the following context, which is composed of past conversation summaries or ingested file contents, to answer the user's question.
-If the context is not relevant to the question, answer based on your general knowledge.
+        full_prompt = f"""You are a helpful AI assistant with a persistent memory. Use the following context, which is composed of past conversation summaries or ingested file contents, to answer the user's question. If the context is not relevant, answer based on your general knowledge.
 
 ### RELEVANT CONTEXT ###
 {relevant_context}
@@ -168,10 +154,8 @@ If the context is not relevant to the question, answer based on your general kno
 ### USER'S QUESTION ###
 {user_prompt}
 """
-
         ai_response = self.text_model.generate_content(full_prompt).text
 
-        # Save a summary of the current interaction back into the context
         interaction_summary = self._summarize_interaction(user_prompt, ai_response)
         summary_embedding = genai.embed_content(
             model=self.embedding_model_name,
@@ -183,9 +167,26 @@ If the context is not relevant to the question, answer based on your general kno
             embeddings=[summary_embedding],
             documents=[interaction_summary],
             ids=[str(uuid.uuid4())],
-            metadatas=[
-                {"topic_id": f"{user_id}-{topic}"}
-            ],  # Add metadata to conversation snippets too
+            # UPDATED: Added metadata to conversation snippets for better tracking
+            metadatas=[{"source": "Conversation Summary"}], 
         )
-
         return ai_response
+
+    # --- NEW METHOD ---
+    def get_sources_for_topic(self, user_id: str, topic: str) -> list[str]:
+        """
+        Retrieves a list of unique source identifiers (filenames, repo URLs) 
+        that have been ingested for a specific user and topic.
+        """
+        collection = self._get_or_create_collection(user_id, topic)
+        results = collection.get(include=["metadatas"])
+
+        if not results or not results["metadatas"]:
+            return []
+
+        unique_sources = set()
+        for metadata in results["metadatas"]:
+            if metadata and "source" in metadata:
+                unique_sources.add(metadata["source"])
+        
+        return sorted(list(unique_sources))

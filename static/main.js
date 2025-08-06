@@ -7,8 +7,63 @@ const uploadForm = document.getElementById('upload-form');
 const repoForm = document.getElementById('repo-form');
 const chatWindow = document.getElementById('chat-window');
 const statusMessage = document.getElementById('status-message');
+const viewContextBtn = document.getElementById('view-context-btn');
+const contextModalEl = document.getElementById('contextModal');
+const contextSourcesList = document.getElementById('context-sources-list');
+// Initialize the Bootstrap Modal object
+const contextModal = new bootstrap.Modal(contextModalEl);
 
 // --- Event Listeners ---
+// --- Add this new event listener ---
+viewContextBtn.addEventListener('click', async () => {
+    const userId = userIdInput.value;
+    const topic = topicInput.value;
+
+    if (!userId || !topic) {
+        showStatus('User ID and Topic are required to view context.', 'danger');
+        return;
+    }
+
+    // Show the modal and a loading message
+    contextModal.show();
+    contextSourcesList.innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-2 small">Fetching sources...</p></div>';
+
+    try {
+        const response = await fetch('/get_sources', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: userId, topic: topic })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to fetch sources.');
+        }
+
+        const data = await response.json();
+        
+        // Clear loading message
+        contextSourcesList.innerHTML = '';
+
+        if (data.sources && data.sources.length > 0) {
+            const list = document.createElement('ul');
+            list.className = 'list-group';
+            data.sources.forEach(source => {
+                const listItem = document.createElement('li');
+                listItem.className = 'list-group-item';
+                listItem.textContent = source;
+                list.appendChild(listItem);
+            });
+            contextSourcesList.appendChild(list);
+        } else {
+            contextSourcesList.innerHTML = '<p class="text-center text-muted">No sources have been ingested for this topic yet.</p>';
+        }
+
+    } catch (error) {
+        // Display error inside the modal
+        contextSourcesList.innerHTML = `<p class="text-center text-danger">Error: ${error.message}</p>`;
+    }
+});
 repoForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const repoUrl = document.getElementById('repo-url-input').value;

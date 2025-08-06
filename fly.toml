@@ -1,10 +1,10 @@
-# fly.toml app configuration file generated for ai-context-tool on 2025-08-02T03:52:46Z
+# fly.toml app configuration file generated for cortex-tfu-ua on 2025-08-02T07:55:57Z
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'ai-context-tool'
-primary_region = 'iad'
+app = 'cortex-tfu-ua'
+primary_region = 'dfw'
 
 [build]
 
