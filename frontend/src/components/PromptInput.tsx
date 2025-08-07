@@ -3,34 +3,34 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 
 interface PromptInputProps {
-  onSubmit: (prompt: string) => void;
-  isLoading: boolean;
+  onPromptSubmit: (prompt: string) => Promise<void>;
+  isDisabled: boolean;
 }
 
-export function PromptInput({ onSubmit, isLoading }: PromptInputProps) {
-  const [prompt, setPrompt] = useState('');
+export function PromptInput({ onPromptSubmit, isDisabled }: PromptInputProps) {
+  const [prompt, setPrompt] = useState('');
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!prompt.trim() || isLoading) return; // Don't submit if loading
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!prompt.trim() || isDisabled) return;
 
-    onSubmit(prompt);
-    setPrompt('');
-  };
+    onPromptSubmit(prompt);
+    setPrompt('');
+  };
 
-  return (
-    <form onSubmit={handleSubmit} className="flex items-center space-x-2">
-      <Input
-        type="text"
-        placeholder={isLoading ? 'Cortex is thinking...' : 'Ask Cortex anything...'}
-        value={prompt}
-        onChange={(e) => setPrompt(e.target.value)}
-        className="flex-grow"
-        disabled={isLoading}
-      />
-      <Button type="submit" disabled={isLoading}>
-        {isLoading ? '...' : 'Send'}
-      </Button>
-    </form>
-  );
+  return (
+    <form onSubmit={handleSubmit} className="flex items-center space-x-2">
+      <Input
+        type="text"
+        placeholder={isDisabled ? 'Cortex is thinking...' : 'Ask Cortex anything...'}
+        value={prompt}
+        onChange={(e) => setPrompt(e.target.value)}
+        className="flex-grow"
+        disabled={isDisabled}
+      />
+      <Button type="submit" disabled={isDisabled}>
+        {isDisabled ? '...' : 'Send'}
+      </Button>
+    </form>
+  );
 }

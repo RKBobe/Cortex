@@ -1,11 +1,5 @@
-// We need to import the Message type from App.tsx.
-// A better practice is to move shared types to their own file,
-// but for now, we'll define it here to keep things simple.
-interface Message {
-  id: number;
-  text: string;
-  sender: 'user' | 'ai';
-}
+// We will import the Message type from App.tsx
+import type { Message } from '../App';
 
 interface ChatWindowProps {
   messages: Message[];
@@ -13,23 +7,25 @@ interface ChatWindowProps {
 
 export function ChatWindow({ messages }: ChatWindowProps) {
   return (
-    <div className="flex flex-col h-full space-y-4 overflow-y-auto">
+    <div className="flex flex-col h-full space-y-4 overflow-y-auto p-4">
       {messages.map((message) => (
         <div
           key={message.id}
+          // UPDATED: 'sender' is now 'role'
           className={`flex ${
-            message.sender === 'ai' ? 'justify-start' : 'justify-end'
+            message.role === 'assistant' ? 'justify-start' : 'justify-end'
           }`}
         >
           <div
+            // UPDATED: 'sender' is now 'role'
             className={`max-w-xs lg:max-w-md p-3 rounded-lg shadow ${
-              message.sender === 'ai'
+              message.role === 'assistant'
                 ? 'bg-slate-200 text-slate-800'
-                // For user messages, we use the primary color from shadcn/ui
-                : 'bg-blue-600 text-white' 
+                : 'bg-blue-600 text-white' // You can customize this to your shadcn/ui primary color
             }`}
           >
-            <p>{message.text}</p>
+            {/* UPDATED: 'text' is now 'content' */}
+            <p className="text-sm whitespace-pre-wrap">{message.content}</p>
           </div>
         </div>
       ))}

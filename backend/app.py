@@ -85,21 +85,66 @@ def ingest_repo():
 @app.route('/get_sources', methods=['GET'])
 def get_sources():
     """
-    Retrieves the list of ingested context sources for a user.
+    Retrieves the list of ingested context sources for a user and topic.
     """
-    # For GET requests, data from the URL is in request.args
     user_id = request.args.get('userId')
+    topic = request.args.get('topic')
 
-    if not user_id:
-        return jsonify({"error": "userId parameter is required"}), 400
+    if not user_id or not topic:
+        return jsonify({"error": "userId and topic parameters are required"}), 400
 
-    print(f"Fetching sources for user '{user_id}'")
+    try:
+        # Call the new backend method to get the list of source strings
+        source_list = backend.get_sources_for_topic(user_id, topic)
+
+        # Transform the list of strings into the object format the frontend expects
+        formatted_sources = []
+        for i, source_name in enumerate(source_list):
+            # Simple logic to determine if the source is a repo or a file
+            source_type = "repo" if source_name.startswith("http") else "file"
+            
+            # For repo URLs, we can show a more friendly name
+            display_name = source_name
+            if source_type == "repo":
+                # Extracts 'user/repo' from 'https://github.com/user/repo'
+                path_part = source_name.split("github.com/")[-1]
+                if path_part:
+                    display_name = path_part
+
+            formatted_sources.append({
+                "id": i + 1,
+                "name": display_name,
+                "type": source_type
+            })
+
+        return jsonify(formatted_sources)
     
-    # TODO: Replace with actual database lookup for the user's sources
-    mock_sources = [
-        {"id": 1, "name": "document.pdf", "type": "file"},
-        {"id": 2, "name": "https://github.com/user/repo", "type": "repo"},
-        {"id": 3, "name": "another_doc.txt", "type": "file"}
-    ]
-    
-    return jsonify(mock_sources)
+    except Exception as e:
+        print(f"An error occurred in /get_sources: {e}")
+        traceback.print_exc()
+        return jsonify({"error": "An internal error occurred."}), 500
+
+# In app.py
+
+@app.route("/api/topics", methods=["GET"])
+def get_topics():
+    """
+    Scans the database and returns a list of unique topic names.
+    """
+    try:
+        collections = backend.client.list_collections()
+        # This logic extracts topic names from collection names like 'user_default-user-id_topic_general'
+        topic_names = set()
+        for c in collections:
+            parts = c.name.split("_topic_")
+            if len(parts) > 1:
+                topic_names.add(parts[1])
+        
+        # Ensure 'general' is always an option
+        if not topic_names:
+            topic_names.add("general")
+            
+        return jsonify(sorted(list(topic_names)))
+    except Exception as e:
+        print(f"An error occurred in /api/topics: {e}")
+        return jsonify({"error": "Could not retrieve topics."}), 500
