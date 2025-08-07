@@ -82,18 +82,24 @@ def ingest_repo():
     return jsonify({"message": f"Started ingestion for {repo_url}. This may take several minutes."})
 
 
-@app.route("/get_sources", methods=["POST"])
+@app.route('/get_sources', methods=['GET'])
 def get_sources():
-    # ... (rest of the function is unchanged)
-    data = request.get_json()
-    user_id = data.get("user_id")
-    topic = data.get("topic")
-    if not user_id or not topic:
-        return jsonify({"error": "User ID and topic are required"}), 400
-    try:
-        source_list = backend.get_sources_for_topic(user_id, topic)
-        return jsonify({"sources": source_list})
-    except Exception as e:
-        print(f"An error occurred in /get_sources: {e}")
-        traceback.print_exc()
-        return jsonify({"error": "An internal error occurred."}), 500
+    """
+    Retrieves the list of ingested context sources for a user.
+    """
+    # For GET requests, data from the URL is in request.args
+    user_id = request.args.get('userId')
+
+    if not user_id:
+        return jsonify({"error": "userId parameter is required"}), 400
+
+    print(f"Fetching sources for user '{user_id}'")
+    
+    # TODO: Replace with actual database lookup for the user's sources
+    mock_sources = [
+        {"id": 1, "name": "document.pdf", "type": "file"},
+        {"id": 2, "name": "https://github.com/user/repo", "type": "repo"},
+        {"id": 3, "name": "another_doc.txt", "type": "file"}
+    ]
+    
+    return jsonify(mock_sources)
