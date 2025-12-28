@@ -1,5 +1,10 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+import threading
+import tempfile
+import git
+from backend.ingest_code import CodeIngestor
+import os
 
 # Initialize the Flask application
 app = Flask(__name__)
@@ -58,6 +63,32 @@ def upload_file():
     return jsonify({"error": "File or userId missing"}), 400
 
 
+def run_ingestion_background(repo_url, user_id):
+    """
+    Background task to clone and ingest a repository.
+    """
+    try:
+        # Extract repository name from URL (simple extraction)
+        # e.g., https://github.com/user/repo.git -> repo
+        repo_name = repo_url.rstrip('/').split('/')[-1]
+        if repo_name.endswith('.git'):
+            repo_name = repo_name[:-4]
+
+        topic = f"{user_id}-{repo_name}"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            print(f"Cloning '{repo_url}' into '{temp_dir}'...")
+            git.Repo.clone_from(repo_url, temp_dir)
+
+            print(f"Starting ingestion for topic '{topic}'...")
+            ingestor = CodeIngestor()
+            ingestor.ingest(temp_dir, topic)
+            print(f"Ingestion for '{repo_url}' complete.")
+
+    except Exception as e:
+        print(f"Error during ingestion of '{repo_url}': {e}")
+
+
 @app.route('/ingest_repo', methods=['POST'])
 def ingest_repo():
     """
@@ -72,7 +103,10 @@ def ingest_repo():
         
     print(f"Ingesting repository '{repo_url}' for user '{user_id}'")
     
-    # TODO: Implement repository cloning and ingestion logic
+    # Start ingestion in a background thread
+    thread = threading.Thread(target=run_ingestion_background, args=(repo_url, user_id), daemon=True)
+    thread.start()
+
     return jsonify({"message": f"Repository '{repo_url}' ingestion started."}), 200
 
 
