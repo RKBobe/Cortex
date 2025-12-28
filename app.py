@@ -4,6 +4,7 @@ import threading
 import tempfile
 import git
 from backend.ingest_code import CodeIngestor
+from backend.context_chat import ChatAssistant
 import os
 
 # Initialize the Flask application
@@ -31,14 +32,23 @@ def chat():
 
     print(f"Received prompt: '{prompt}' for topic '{topic}' from user '{user_id}'")
 
-    # TODO: Replace with actual model inference logic
-    mock_response = {
-        "id": 123, # A unique ID for the message
-        "text": f"This is a mock AI response to your message: '{prompt}'",
-        "sender": "ai"
-    }
-    
-    return jsonify(mock_response)
+    try:
+        # Initialize the assistant (consider caching this instance or handling it per request)
+        assistant = ChatAssistant()
+
+        # Get the real AI response
+        response_text = assistant.get_response(topic, prompt)
+
+        response_payload = {
+            "id": 123, # Placeholder ID
+            "text": response_text,
+            "sender": "ai"
+        }
+        return jsonify(response_payload)
+
+    except Exception as e:
+        print(f"Error in chat endpoint: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route('/upload', methods=['POST'])
