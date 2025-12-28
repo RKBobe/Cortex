@@ -31,11 +31,10 @@ export function IngestionPanel({ userId, onUploadSuccess }: IngestionPanelProps)
           if (statusData.status === 'processing') {
             setIngestionStatusMsg('Ingesting repository... This may take a minute.');
           } else if (statusData.status === 'completed') {
-            setIngestionStatusMsg(`Ingestion complete! Topic: ${statusData.topic}`);
+            setIngestionStatusMsg('Ingestion complete!');
             setIsIngesting(false);
             setRepoUrl('');
-            // Pass the auto-generated topic from backend to the parent
-            onUploadSuccess(statusData.topic || '');
+            onUploadSuccess(topic); // Notify parent
             // Clear message after a delay
             setTimeout(() => setIngestionStatusMsg(''), 5000);
           } else if (statusData.status === 'failed') {
@@ -49,7 +48,7 @@ export function IngestionPanel({ userId, onUploadSuccess }: IngestionPanelProps)
     }
 
     return () => clearInterval(intervalId);
-  }, [isIngesting, userId, onUploadSuccess]);
+  }, [isIngesting, userId, topic, onUploadSuccess]);
 
   const handleFileSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -78,8 +77,8 @@ export function IngestionPanel({ userId, onUploadSuccess }: IngestionPanelProps)
     setIsIngesting(true);
     setIngestionStatusMsg('Starting ingestion...');
     try {
-      // Pass empty string for topic; backend auto-generates it
-      await ingestRepo(repoUrl, userId, "");
+      // UPDATED: Pass topic to the API call
+      await ingestRepo(repoUrl, userId, topic);
       // Don't reset state here; let the polling handle it
     } catch (error) {
       console.error('Repo ingestion failed.');
