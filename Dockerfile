@@ -9,7 +9,7 @@ WORKDIR /app
 
 # Copy the dependencies file and install them
 COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the application code into the container
 COPY . .

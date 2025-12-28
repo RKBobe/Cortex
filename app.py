@@ -11,15 +11,8 @@ import os
 app = Flask(__name__)
 
 # Global dictionary to store ingestion status
-# Format: {user_id: {"status": "processing" | "completed" | "failed", "repo": "url", "error": "msg", "topic": "topic_name"}}
+# Format: {user_id: {"status": "processing" | "completed" | "failed", "repo": "url", "error": "msg"}}
 ingestion_status = {}
-
-# Initialize ChatAssistant globally to reuse the DB connection
-try:
-    assistant = ChatAssistant()
-except Exception as e:
-    print(f"Warning: Failed to initialize ChatAssistant globally: {e}")
-    assistant = None
 
 # Configure CORS (Cross-Origin Resource Sharing)
 # This allows your frontend (running on a different port) to make requests to this backend.
@@ -44,10 +37,8 @@ def chat():
     print(f"Received prompt: '{prompt}' for topic '{topic}' from user '{user_id}'")
 
     try:
-        global assistant
-        if assistant is None:
-             # Try initializing again if it failed on startup (e.g., due to temporary env issue)
-             assistant = ChatAssistant()
+        # Initialize the assistant (consider caching this instance or handling it per request)
+        assistant = ChatAssistant()
 
         # Get the real AI response
         response_text = assistant.get_response(topic, prompt)
@@ -111,7 +102,7 @@ def run_ingestion_background(repo_url, user_id):
             ingestor.ingest(temp_dir, topic)
             print(f"Ingestion for '{repo_url}' complete.")
 
-        ingestion_status[user_id] = {"status": "completed", "repo": repo_url, "topic": topic}
+        ingestion_status[user_id] = {"status": "completed", "repo": repo_url}
 
     except Exception as e:
         print(f"Error during ingestion of '{repo_url}': {e}")
