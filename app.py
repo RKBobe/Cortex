@@ -1,8 +1,18 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+import threading
+import tempfile
+import git
+from backend.ingest_code import CodeIngestor
+from backend.context_chat import ChatAssistant
+import os
 
 # Initialize the Flask application
 app = Flask(__name__)
+
+# Global dictionary to store ingestion status
+# Format: {user_id: {"status": "processing" | "completed" | "failed", "repo": "url", "error": "msg"}}
+ingestion_status = {}
 
 # Configure CORS (Cross-Origin Resource Sharing)
 # This allows your frontend (running on a different port) to make requests to this backend.
@@ -26,14 +36,23 @@ def chat():
 
     print(f"Received prompt: '{prompt}' for topic '{topic}' from user '{user_id}'")
 
-    # TODO: Replace with actual model inference logic
-    mock_response = {
-        "id": 123, # A unique ID for the message
-        "text": f"This is a mock AI response to your message: '{prompt}'",
-        "sender": "ai"
-    }
-    
-    return jsonify(mock_response)
+    try:
+        # Initialize the assistant (consider caching this instance or handling it per request)
+        assistant = ChatAssistant()
+
+        # Get the real AI response
+        response_text = assistant.get_response(topic, prompt)
+
+        response_payload = {
+            "id": 123, # Placeholder ID
+            "text": response_text,
+            "sender": "ai"
+        }
+        return jsonify(response_payload)
+
+    except Exception as e:
+        print(f"Error in chat endpoint: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route('/upload', methods=['POST'])
@@ -58,6 +77,38 @@ def upload_file():
     return jsonify({"error": "File or userId missing"}), 400
 
 
+def run_ingestion_background(repo_url, user_id):
+    """
+    Background task to clone and ingest a repository.
+    """
+    global ingestion_status
+    ingestion_status[user_id] = {"status": "processing", "repo": repo_url}
+
+    try:
+        # Extract repository name from URL (simple extraction)
+        # e.g., https://github.com/user/repo.git -> repo
+        repo_name = repo_url.rstrip('/').split('/')[-1]
+        if repo_name.endswith('.git'):
+            repo_name = repo_name[:-4]
+
+        topic = f"{user_id}-{repo_name}"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            print(f"Cloning '{repo_url}' into '{temp_dir}'...")
+            git.Repo.clone_from(repo_url, temp_dir)
+
+            print(f"Starting ingestion for topic '{topic}'...")
+            ingestor = CodeIngestor()
+            ingestor.ingest(temp_dir, topic)
+            print(f"Ingestion for '{repo_url}' complete.")
+
+        ingestion_status[user_id] = {"status": "completed", "repo": repo_url}
+
+    except Exception as e:
+        print(f"Error during ingestion of '{repo_url}': {e}")
+        ingestion_status[user_id] = {"status": "failed", "repo": repo_url, "error": str(e)}
+
+
 @app.route('/ingest_repo', methods=['POST'])
 def ingest_repo():
     """
@@ -72,8 +123,24 @@ def ingest_repo():
         
     print(f"Ingesting repository '{repo_url}' for user '{user_id}'")
     
-    # TODO: Implement repository cloning and ingestion logic
+    # Start ingestion in a background thread
+    thread = threading.Thread(target=run_ingestion_background, args=(repo_url, user_id), daemon=True)
+    thread.start()
+
     return jsonify({"message": f"Repository '{repo_url}' ingestion started."}), 200
+
+
+@app.route('/ingestion_status', methods=['GET'])
+def get_ingestion_status():
+    """
+    Returns the current ingestion status for a user.
+    """
+    user_id = request.args.get('userId')
+    if not user_id:
+        return jsonify({"error": "userId parameter is required"}), 400
+
+    status = ingestion_status.get(user_id, {"status": "idle"})
+    return jsonify(status), 200
 
 
 @app.route('/get_sources', methods=['GET'])

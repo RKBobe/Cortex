@@ -20,6 +20,18 @@ export const uploadFile = async (file: File, userId: string, topic: string): Pro
   }
 };
 
+export const getIngestionStatus = async (userId: string): Promise<any> => {
+  try {
+    const response = await apiClient.get('/ingestion_status', {
+      params: { userId },
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching ingestion status:', error);
+    throw error;
+  }
+};
+
 // UPDATED: Added 'topic' parameter
 export const ingestRepo = async (repoUrl: string, userId: string, topic: string): Promise<any> => {
   try {
