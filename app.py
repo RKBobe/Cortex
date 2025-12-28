@@ -10,6 +10,10 @@ import os
 # Initialize the Flask application
 app = Flask(__name__)
 
+# Global dictionary to store ingestion status
+# Format: {user_id: {"status": "processing" | "completed" | "failed", "repo": "url", "error": "msg"}}
+ingestion_status = {}
+
 # Configure CORS (Cross-Origin Resource Sharing)
 # This allows your frontend (running on a different port) to make requests to this backend.
 CORS(app, resources={r"/*": {"origins": "http://localhost:5173"}}) # Adjust port if your frontend runs elsewhere
@@ -77,6 +81,9 @@ def run_ingestion_background(repo_url, user_id):
     """
     Background task to clone and ingest a repository.
     """
+    global ingestion_status
+    ingestion_status[user_id] = {"status": "processing", "repo": repo_url}
+
     try:
         # Extract repository name from URL (simple extraction)
         # e.g., https://github.com/user/repo.git -> repo
@@ -95,8 +102,11 @@ def run_ingestion_background(repo_url, user_id):
             ingestor.ingest(temp_dir, topic)
             print(f"Ingestion for '{repo_url}' complete.")
 
+        ingestion_status[user_id] = {"status": "completed", "repo": repo_url}
+
     except Exception as e:
         print(f"Error during ingestion of '{repo_url}': {e}")
+        ingestion_status[user_id] = {"status": "failed", "repo": repo_url, "error": str(e)}
 
 
 @app.route('/ingest_repo', methods=['POST'])
@@ -118,6 +128,19 @@ def ingest_repo():
     thread.start()
 
     return jsonify({"message": f"Repository '{repo_url}' ingestion started."}), 200
+
+
+@app.route('/ingestion_status', methods=['GET'])
+def get_ingestion_status():
+    """
+    Returns the current ingestion status for a user.
+    """
+    user_id = request.args.get('userId')
+    if not user_id:
+        return jsonify({"error": "userId parameter is required"}), 400
+
+    status = ingestion_status.get(user_id, {"status": "idle"})
+    return jsonify(status), 200
 
 
 @app.route('/get_sources', methods=['GET'])

@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { uploadFile, ingestRepo } from '@/api/ingestion';
+import { uploadFile, ingestRepo, getIngestionStatus } from '@/api/ingestion';
 
 // UPDATED: The parent component will need to know which topic was successful
 interface IngestionPanelProps {
@@ -18,8 +18,40 @@ export function IngestionPanel({ userId, onUploadSuccess }: IngestionPanelProps)
   const [repoUrl, setRepoUrl] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [isIngesting, setIsIngesting] = useState(false);
+  const [ingestionStatusMsg, setIngestionStatusMsg] = useState('');
   
   const isLoading = isUploading || isIngesting;
+
+  // Poll for ingestion status when isIngesting is true
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout;
+
+    if (isIngesting) {
+      intervalId = setInterval(async () => {
+        try {
+          const statusData = await getIngestionStatus(userId);
+
+          if (statusData.status === 'processing') {
+            setIngestionStatusMsg('Ingesting repository... This may take a minute.');
+          } else if (statusData.status === 'completed') {
+            setIngestionStatusMsg('Ingestion complete!');
+            setIsIngesting(false);
+            setRepoUrl('');
+            onUploadSuccess(topic); // Notify parent
+            // Clear message after a delay
+            setTimeout(() => setIngestionStatusMsg(''), 5000);
+          } else if (statusData.status === 'failed') {
+            setIngestionStatusMsg(`Ingestion failed: ${statusData.error}`);
+            setIsIngesting(false);
+          }
+        } catch (error) {
+          console.error('Error polling ingestion status:', error);
+        }
+      }, 2000); // Poll every 2 seconds
+    }
+
+    return () => clearInterval(intervalId);
+  }, [isIngesting, userId, topic, onUploadSuccess]);
 
   const handleFileSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -47,15 +79,15 @@ export function IngestionPanel({ userId, onUploadSuccess }: IngestionPanelProps)
     if (!repoUrl.trim() || !topic.trim() || isLoading) return;
 
     setIsIngesting(true);
+    setIngestionStatusMsg('Starting ingestion...');
     try {
       // UPDATED: Pass topic to the API call
       await ingestRepo(repoUrl, userId, topic);
-      onUploadSuccess(topic);
+      // Don't reset state here; let the polling handle it
     } catch (error) {
       console.error('Repo ingestion failed.');
-    } finally {
-      setRepoUrl('');
       setIsIngesting(false);
+      setIngestionStatusMsg('Failed to start ingestion.');
     }
   };
 
@@ -121,6 +153,11 @@ export function IngestionPanel({ userId, onUploadSuccess }: IngestionPanelProps)
             <Button type="submit" className="w-full" disabled={isLoading || !topic.trim()}>
               {isIngesting ? 'Ingesting...' : 'Ingest'}
             </Button>
+            {ingestionStatusMsg && (
+              <p className="text-sm text-center text-muted-foreground mt-2">
+                {ingestionStatusMsg}
+              </p>
+            )}
           </form>
         </CardContent>
       </Card>
