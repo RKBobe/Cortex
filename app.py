@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import threading
 import tempfile
@@ -8,7 +8,8 @@ from backend.context_chat import ChatAssistant
 import os
 
 # Initialize the Flask application
-app = Flask(__name__)
+# We point static_folder to 'static' where Docker copies the frontend build
+app = Flask(__name__, static_folder='static', static_url_path='/')
 
 # Global dictionary to store ingestion status
 # Format: {user_id: {"status": "processing" | "completed" | "failed", "repo": "url", "error": "msg", "topic": "topic_name"}}
@@ -74,6 +75,20 @@ def health_check():
     Simple health check to confirm the server is running.
     """
     return jsonify({"status": "ok"}), 200
+
+
+@app.route('/')
+def serve_index():
+    """Serve the frontend's index.html."""
+    return send_from_directory(app.static_folder, 'index.html')
+
+
+@app.errorhandler(404)
+def not_found(e):
+    """
+    SPA fallback: Serve index.html when a route is not found.
+    """
+    return send_from_directory(app.static_folder, 'index.html')
 
 
 @app.route('/upload', methods=['POST'])
