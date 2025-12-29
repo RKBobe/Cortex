@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { uploadFile, ingestRepo } from '@/api/ingestion';
+import { uploadFile, ingestRepo, getIngestionStatus } from '@/api/ingestion';
 
 // UPDATED: The parent component will need to know which topic was successful
 interface IngestionPanelProps {
@@ -12,28 +12,58 @@ interface IngestionPanelProps {
 }
 
 export function IngestionPanel({ userId, onUploadSuccess }: IngestionPanelProps) {
-  // --- NEW: State for the topic input ---
-  const [topic, setTopic] = useState('');
-  
   const [repoUrl, setRepoUrl] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [isIngesting, setIsIngesting] = useState(false);
+  const [ingestionStatusMsg, setIngestionStatusMsg] = useState('');
   
   const isLoading = isUploading || isIngesting;
+
+  // Poll for ingestion status when isIngesting is true
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout;
+
+    if (isIngesting) {
+      intervalId = setInterval(async () => {
+        try {
+          const statusData = await getIngestionStatus(userId);
+
+          if (statusData.status === 'processing') {
+            setIngestionStatusMsg('Ingesting repository... This may take a minute.');
+          } else if (statusData.status === 'completed') {
+            setIngestionStatusMsg(`Ingestion complete! Topic: ${statusData.topic}`);
+            setIsIngesting(false);
+            setRepoUrl('');
+            // Pass the auto-generated topic from backend to the parent
+            onUploadSuccess(statusData.topic || '');
+            // Clear message after a delay
+            setTimeout(() => setIngestionStatusMsg(''), 5000);
+          } else if (statusData.status === 'failed') {
+            setIngestionStatusMsg(`Ingestion failed: ${statusData.error}`);
+            setIsIngesting(false);
+          }
+        } catch (error) {
+          console.error('Error polling ingestion status:', error);
+        }
+      }, 2000); // Poll every 2 seconds
+    }
+
+    return () => clearInterval(intervalId);
+  }, [isIngesting, userId, onUploadSuccess]);
 
   const handleFileSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fileInput = e.currentTarget.elements.namedItem('file-upload') as HTMLInputElement;
     const file = fileInput.files?.[0];
 
-    // UPDATED: Check for topic
-    if (!file || !topic.trim() || isLoading) return;
+    if (!file || isLoading) return;
 
     setIsUploading(true);
     try {
-      // UPDATED: Pass topic to the API call
-      await uploadFile(file, userId, topic);
-      onUploadSuccess(topic);
+      // Pass empty string for topic as backend might auto-generate or require update
+      // Note: File upload might still need a topic strategy if not auto-generated
+      await uploadFile(file, userId, "");
+      onUploadSuccess(""); // Placeholder
     } catch (error) {
       console.error('File upload failed.');
     } finally {
@@ -43,56 +73,34 @@ export function IngestionPanel({ userId, onUploadSuccess }: IngestionPanelProps)
 
   const handleRepoSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    // UPDATED: Check for topic
-    if (!repoUrl.trim() || !topic.trim() || isLoading) return;
+    if (!repoUrl.trim() || isLoading) return;
 
     setIsIngesting(true);
+    setIngestionStatusMsg('Starting ingestion...');
     try {
-      // UPDATED: Pass topic to the API call
-      await ingestRepo(repoUrl, userId, topic);
-      onUploadSuccess(topic);
+      // Pass empty string for topic; backend auto-generates it
+      await ingestRepo(repoUrl, userId, "");
+      // Don't reset state here; let the polling handle it
     } catch (error) {
       console.error('Repo ingestion failed.');
-    } finally {
-      setRepoUrl('');
       setIsIngesting(false);
+      setIngestionStatusMsg('Failed to start ingestion.');
     }
   };
 
   return (
     <div className="space-y-6">
-      {/* --- NEW: Topic Input Card --- */}
       <Card>
         <CardHeader>
-          <CardTitle>Step 1: Define a Topic</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid w-full items-center gap-1.5">
-            <Label htmlFor="topic">Topic Name</Label>
-            <Input
-              id="topic"
-              type="text"
-              placeholder="e.g., react-state-management"
-              value={topic}
-              onChange={(e) => setTopic(e.target.value)}
-              disabled={isLoading}
-            />
-          </div>
-        </CardContent>
-      </Card>
-      
-      {/* --- Step 2: Ingestion Options --- */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Step 2: Add a Source</CardTitle>
+          <CardTitle>Add a Source</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           <form onSubmit={handleFileSubmit} className="space-y-4">
             <div className="grid w-full items-center gap-1.5">
               <Label htmlFor="file-upload">Upload File</Label>
-              <Input id="file-upload" type="file" disabled={isLoading || !topic.trim()} />
+              <Input id="file-upload" type="file" disabled={isLoading} />
             </div>
-            <Button type="submit" className="w-full" disabled={isLoading || !topic.trim()}>
+            <Button type="submit" className="w-full" disabled={isLoading}>
               {isUploading ? 'Uploading...' : 'Upload'}
             </Button>
           </form>
@@ -115,12 +123,17 @@ export function IngestionPanel({ userId, onUploadSuccess }: IngestionPanelProps)
                 placeholder="https://github.com/user/repo"
                 value={repoUrl}
                 onChange={(e) => setRepoUrl(e.target.value)}
-                disabled={isLoading || !topic.trim()}
+                disabled={isLoading}
               />
             </div>
-            <Button type="submit" className="w-full" disabled={isLoading || !topic.trim()}>
+            <Button type="submit" className="w-full" disabled={isLoading}>
               {isIngesting ? 'Ingesting...' : 'Ingest'}
             </Button>
+            {ingestionStatusMsg && (
+              <p className="text-sm text-center text-muted-foreground mt-2">
+                {ingestionStatusMsg}
+              </p>
+            )}
           </form>
         </CardContent>
       </Card>
