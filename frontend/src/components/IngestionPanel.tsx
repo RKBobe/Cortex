@@ -13,6 +13,7 @@ interface IngestionPanelProps {
 
 export function IngestionPanel({ userId, onUploadSuccess }: IngestionPanelProps) {
   const [repoUrl, setRepoUrl] = useState('');
+  const [topic, setTopic] = useState(''); // Added topic state
   const [isUploading, setIsUploading] = useState(false);
   const [isIngesting, setIsIngesting] = useState(false);
   const [ingestionStatusMsg, setIngestionStatusMsg] = useState('');
@@ -34,7 +35,7 @@ export function IngestionPanel({ userId, onUploadSuccess }: IngestionPanelProps)
             setIngestionStatusMsg('Ingestion complete!');
             setIsIngesting(false);
             setRepoUrl('');
-            onUploadSuccess(topic); // Notify parent
+            onUploadSuccess(topic); // Notify parent with topic
             // Clear message after a delay
             setTimeout(() => setIngestionStatusMsg(''), 5000);
           } else if (statusData.status === 'failed') {
@@ -47,24 +48,27 @@ export function IngestionPanel({ userId, onUploadSuccess }: IngestionPanelProps)
       }, 2000); // Poll every 2 seconds
     }
 
-    return () => clearInterval(intervalId);
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
   }, [isIngesting, userId, topic, onUploadSuccess]);
 
   const handleFileSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const fileInput = e.currentTarget.elements.namedItem('file-upload') as HTMLInputElement;
-    const file = fileInput.files?.[0];
+    const fileInput = e.currentTarget.elements.namedItem('file-upload') as HTMLInputElement | null;
+    const file = fileInput?.files?.[0];
 
     if (!file || isLoading) return;
 
     setIsUploading(true);
     try {
-      // Pass empty string for topic as backend might auto-generate or require update
-      // Note: File upload might still need a topic strategy if not auto-generated
-      await uploadFile(file, userId, "");
-      onUploadSuccess(""); // Placeholder
+      await uploadFile(file, userId, topic);
+      onUploadSuccess(topic);
+      setIngestionStatusMsg('File uploaded successfully.');
+      setTimeout(() => setIngestionStatusMsg(''), 3000);
     } catch (error) {
-      console.error('File upload failed.');
+      console.error('File upload failed.', error);
+      setIngestionStatusMsg('File upload failed.');
     } finally {
       setIsUploading(false);
     }
@@ -77,11 +81,10 @@ export function IngestionPanel({ userId, onUploadSuccess }: IngestionPanelProps)
     setIsIngesting(true);
     setIngestionStatusMsg('Starting ingestion...');
     try {
-      // UPDATED: Pass topic to the API call
       await ingestRepo(repoUrl, userId, topic);
-      // Don't reset state here; let the polling handle it
+      // Polling will detect completion
     } catch (error) {
-      console.error('Repo ingestion failed.');
+      console.error('Repo ingestion failed.', error);
       setIsIngesting(false);
       setIngestionStatusMsg('Failed to start ingestion.');
     }
@@ -94,12 +97,28 @@ export function IngestionPanel({ userId, onUploadSuccess }: IngestionPanelProps)
           <CardTitle>Add a Source</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
+
+          {/* Topic input shared by both upload and repo ingestion */}
+          <div className="grid w-full items-center gap-1.5">
+            <Label htmlFor="topic">Topic (required)</Label>
+            <Input
+              id="topic"
+              name="topic"
+              type="text"
+              placeholder="Enter topic"
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              disabled={isLoading}
+            />
+          </div>
+
           <form onSubmit={handleFileSubmit} className="space-y-4">
             <div className="grid w-full items-center gap-1.5">
               <Label htmlFor="file-upload">Upload File</Label>
-              <Input id="file-upload" type="file" disabled={isLoading} />
+              {/* ensure name is present so namedItem() finds it */}
+              <Input id="file-upload" name="file-upload" type="file" disabled={isLoading} />
             </div>
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button type="submit" className="w-full" disabled={isLoading || !topic}>
               {isUploading ? 'Uploading...' : 'Upload'}
             </Button>
           </form>
@@ -125,7 +144,7 @@ export function IngestionPanel({ userId, onUploadSuccess }: IngestionPanelProps)
                 disabled={isLoading}
               />
             </div>
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button type="submit" className="w-full" disabled={isLoading || !topic}>
               {isIngesting ? 'Ingesting...' : 'Ingest'}
             </Button>
             {ingestionStatusMsg && (
