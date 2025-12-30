@@ -8,19 +8,11 @@ from backend.context_chat import ChatAssistant
 import os
 
 # Initialize the Flask application
-# We point static_folder to 'static' where Docker copies the frontend build
-app = Flask(__name__, static_folder='static', static_url_path='/')
+app = Flask(__name__)
 
 # Global dictionary to store ingestion status
-# Format: {user_id: {"status": "processing" | "completed" | "failed", "repo": "url", "error": "msg", "topic": "topic_name"}}
+# Format: {user_id: {"status": "processing" | "completed" | "failed", "repo": "url", "error": "msg"}}
 ingestion_status = {}
-
-# Initialize ChatAssistant globally to reuse the DB connection
-try:
-    assistant = ChatAssistant()
-except Exception as e:
-    print(f"Warning: Failed to initialize ChatAssistant globally (likely missing GOOGLE_API_KEY): {e}")
-    assistant = None
 
 # Configure CORS (Cross-Origin Resource Sharing)
 # This allows your frontend (running on a different port) to make requests to this backend.
@@ -45,14 +37,8 @@ def chat():
     print(f"Received prompt: '{prompt}' for topic '{topic}' from user '{user_id}'")
 
     try:
-        global assistant
-        if assistant is None:
-             # Try initializing again if it failed on startup (e.g., due to temporary env issue)
-             try:
-                assistant = ChatAssistant()
-             except Exception as e:
-                print(f"ChatAssistant lazy init failed: {e}")
-                return jsonify({"error": "AI Service Unavailable. Check server logs/API keys."}), 503
+        # Initialize the assistant (consider caching this instance or handling it per request)
+        assistant = ChatAssistant()
 
         # Get the real AI response
         response_text = assistant.get_response(topic, prompt)
@@ -67,28 +53,6 @@ def chat():
     except Exception as e:
         print(f"Error in chat endpoint: {e}")
         return jsonify({"error": str(e)}), 500
-
-
-@app.route('/health', methods=['GET'])
-def health_check():
-    """
-    Simple health check to confirm the server is running.
-    """
-    return jsonify({"status": "ok"}), 200
-
-
-@app.route('/')
-def serve_index():
-    """Serve the frontend's index.html."""
-    return send_from_directory(app.static_folder, 'index.html')
-
-
-@app.errorhandler(404)
-def not_found(e):
-    """
-    SPA fallback: Serve index.html when a route is not found.
-    """
-    return send_from_directory(app.static_folder, 'index.html')
 
 
 @app.route('/upload', methods=['POST'])
@@ -138,7 +102,7 @@ def run_ingestion_background(repo_url, user_id):
             ingestor.ingest(temp_dir, topic)
             print(f"Ingestion for '{repo_url}' complete.")
 
-        ingestion_status[user_id] = {"status": "completed", "repo": repo_url, "topic": topic}
+        ingestion_status[user_id] = {"status": "completed", "repo": repo_url}
 
     except Exception as e:
         print(f"Error during ingestion of '{repo_url}': {e}")

@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y git
 
 WORKDIR /app
 
-# Install Python dependencies
+# Copy the dependencies file and install them
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
 
