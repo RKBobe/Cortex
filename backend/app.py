@@ -174,3 +174,10 @@ def login_user():
 
     # If credentials are bad, return an 'unauthorized' error
     return jsonify({"error": "Invalid username or password"}), 401
+
+@app.route('/', methods=['GET'])
+def health_check():
+    return jsonify({
+        "status": "online", 
+        "message": "Cortex Backend is running"
+    }), 200
